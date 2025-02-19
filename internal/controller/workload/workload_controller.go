@@ -17,6 +17,8 @@ limitations under the License.
 package workload
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -72,15 +74,20 @@ func (aw *AppWrapper) GVK() schema.GroupVersionKind {
 }
 
 func (aw *AppWrapper) PodSets() []kueue.PodSet {
-	podSets, err := utils.GetPodSets((*awv1beta2.AppWrapper)(aw))
+	podSpecTemplates, awPodSets, err := utils.GetComponentPodSpecs((*awv1beta2.AppWrapper)(aw))
 	if err != nil {
 		// Kueue will raise an error on zero length PodSet; the Kueue GenericJob API prevents propagating the actual error.
 		return []kueue.PodSet{}
 	}
-	for psIndex := range podSets {
-		podSets[psIndex].TopologyRequest = jobframework.PodSetTopologyRequest(&podSets[psIndex].Template.ObjectMeta, nil, nil, nil)
+	podSets := []kueue.PodSet{}
+	for psIndex := range podSpecTemplates {
+		podSets = append(podSets, kueue.PodSet{
+			Name:            fmt.Sprintf("%s-%v", aw.Name, psIndex),
+			Template:        *podSpecTemplates[psIndex],
+			Count:           utils.Replicas(awPodSets[psIndex]),
+			TopologyRequest: jobframework.PodSetTopologyRequest(&(podSpecTemplates[psIndex].ObjectMeta), nil, nil, nil),
+		})
 	}
-
 	return podSets
 }
 
